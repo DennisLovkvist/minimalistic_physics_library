@@ -1,5 +1,8 @@
 #pragma once
 #include "mpl.h"
+#define FLT_MAX 3.402823466e+38F /* max value */
+#define FLT_MIN 1.175494351e-38F /* min positive value */
+#define PI 3.14159265358979323846
 void vector2f_normal(Vector2 a, Vector2 b, Vector2 *result);
 void vector2f_cross_vf(Vector2 v, float z, Vector2 *result);
 void vector2f_cross_vv(Vector2 v1, Vector2 v2, float *result);

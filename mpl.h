@@ -18,18 +18,6 @@ struct RotationMatrix
     float input[3][1];
     float output[3][1];
 };
-typedef struct RigidBody RigidBody;
-struct RigidBody
-{
-    unsigned int is_colliding,active,is_static,lock_orientation,ignore_gravity;
-    float restitution,static_frictionf,dynamic_frictionf;
-    Vector2 velocity;
-    Vector2 force;
-    float angularVelocity,torque,orient;
-    float mass, invMass, inertia, invInertia;
-    float aprox_point_area,longest_radius,damping,velocity_epsilon;
-};
-
 typedef struct Polygon Polygon;
 struct Polygon
 {
@@ -41,6 +29,18 @@ struct Polygon
     Vector2 position,position_last;
     float orientation,orientation_last,radius;
     Vector2 edge[2];
+};
+typedef struct RigidBody RigidBody;
+struct RigidBody
+{
+    Polygon polygon;
+    unsigned int is_colliding,active,is_static,lock_orientation,ignore_gravity;
+    float restitution,static_frictionf,dynamic_frictionf;
+    Vector2 velocity;
+    Vector2 force;
+    float angularVelocity,torque,orient;
+    float mass, invMass, inertia, invInertia;
+    float aprox_point_area,longest_radius,damping,velocity_epsilon;
 };
 typedef struct Manifold Manifold;
 struct Manifold
@@ -57,3 +57,5 @@ struct Manifold
 };
 void mpl_polygon_init(Polygon *polygon, Vector2 *vertices, unsigned int vertex_count);
 void mpl_polygon_transform(Polygon *polygon);
+void mpl_rigid_body_init(RigidBody *rigid_body);
+void update(RigidBody *bodies, unsigned int body_count, int iterations ,float dt, float G);
