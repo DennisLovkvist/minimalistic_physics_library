@@ -19,21 +19,22 @@ void mpl_polygon_get_centroid(Vector2 *vertices, unsigned int vertex_count, Vect
 }
 void mpl_polygon_get_support_point(Vector2 *vertices,unsigned int vertex_count, Vector2 dir,Vector2 *best_vertex)
 {
-    float bestProjection = FLT_MIN;   
+    float best_projection = -10000;   
     best_vertex->x = 0;
     best_vertex->y = 0;
 
     for (int i = 0; i < vertex_count; ++i)
     {
-        Vector2 v = vertices[i];
-        float projection;
-        vector2f_dot_vv(v, dir, &projection);
+        Vector2 v;
+        v.x = vertices[i].x;
+        v.y = vertices[i].y;
+        float projection = vector2f_dot_vv(v, dir);
 
-        if (projection > bestProjection)
+        if (projection > best_projection)
         {
             best_vertex->x = v.x;
             best_vertex->y = v.y;
-            bestProjection = projection;
+            best_projection = projection;
         }
     }
 }
@@ -45,8 +46,7 @@ void mpl_polygon_get_reverse_support_point(Vector2 *vertices,unsigned int vertex
     for (int i = 0; i < vertex_count; ++i)
     {
         Vector2 v = vertices[i];
-        float projection;
-        vector2f_dot_vv(v, dir, &projection);
+        float projection = vector2f_dot_vv(v, dir);
 
         if (projection < bestProjection)
         {            
@@ -195,7 +195,7 @@ void mpl_polygon_init(Polygon *polygon, Vector2 *vertices, unsigned int vertex_c
         polygon->m_vertices[i].x = vertices[i].x;
         polygon->m_vertices[i].y = vertices[i].y;
     }    
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < vertex_count; i++)
     {
         polygon->m_edges[i].m_index_a = i;
         polygon->m_edges[i].m_index_b = (i + 1 < vertex_count) ? i + 1 : 0;    
@@ -300,10 +300,15 @@ void mpl_rigid_body_apply_force(RigidBody *rigid_body,Vector2 f)
 
 void mpl_rigid_body_apply_impulse(RigidBody *rigid_body,Vector2 impulse, Vector2 contactVector)
 {    
+
+    vector2_print(impulse);
+    if(isnan(impulse.x) || isnan(impulse.y))
+    {
+        return;
+    }
     rigid_body->velocity.x += rigid_body->invMass * impulse.x;
     rigid_body->velocity.y += rigid_body->invMass * impulse.y;
-    float n;
-    vector2f_cross_vv(contactVector, impulse,&n);
+    float n = vector2f_cross_vv(contactVector, impulse);
     if (!rigid_body->lock_orientation) 
     {
         rigid_body->angularVelocity += rigid_body->invInertia * n;
@@ -333,9 +338,598 @@ void mpl_rigid_body_clear_forces(RigidBody *rigid_body)
     rigid_body->force.y = 0;
     
 }
-void update(RigidBody *bodies, unsigned int body_count, int iterations ,float dt, float G)
+void mpl_manifold_init(Manifold *manifold,float dt)
 {
-    bodies[0].force.y = 100000;
+    manifold->e = min(manifold->A->restitution, manifold->B->restitution);
+    manifold->static_friction = sqrt(manifold->A->static_frictionf * manifold->B->static_frictionf);
+    manifold->dynamic_friction = sqrt(manifold->A->dynamic_frictionf * manifold->B->dynamic_frictionf);
+    
+}
+void mpl_manifold_apply_impulse(Manifold *manifold)
+{
+    for (int i = 0; i < manifold->contact_count; ++i)
+    {
+        Vector2 ra;
+        ra.x = manifold->A->polygon.position.x - manifold->contacts[i].x;
+        ra.y = manifold->A->polygon.position.y - manifold->contacts[i].y;
+
+        Vector2 rb;
+        rb.x = manifold->B->polygon.position.x - manifold->contacts[i].x;
+        rb.y = manifold->B->polygon.position.y - manifold->contacts[i].y;         
+        
+        Vector2 cross_rb_av;
+        vector2f_cross_vf(rb,manifold->B->angularVelocity,&cross_rb_av);
+        Vector2 cross_ra_av;
+        vector2f_cross_vf(ra,manifold->A->angularVelocity,&cross_ra_av);
+        Vector2 rv;
+        rv.x = manifold->B->velocity.x + cross_rb_av.x - manifold->A->velocity.x - cross_ra_av.x;
+        rv.y = manifold->B->velocity.y + cross_rb_av.y - manifold->A->velocity.y - cross_ra_av.y;
+
+        float contactVel = vector2f_dot_vv(rv, manifold->normal);
+        
+        if (contactVel > 0)
+        {
+            return;
+        }
+
+        float raCrossN = vector2f_cross_vv(ra, manifold->normal);
+        float rbCrossN = vector2f_cross_vv(rb, manifold->normal);
+
+        float invMassSum = manifold->A->invMass + manifold->B->invMass + (raCrossN * raCrossN) * manifold->A->invInertia + (rbCrossN * rbCrossN) * manifold->B->invInertia;
+        
+        float j = -(1.0f + manifold->e) * contactVel;                
+        j /= invMassSum;
+        j /= manifold->contact_count;
+
+
+        Vector2 impulse;
+        impulse.x = manifold->normal.x * j;
+        impulse.y = manifold->normal.y * j;
+
+        mpl_rigid_body_apply_impulse(manifold->B,impulse,rb);
+        vector2f_negate(&impulse);
+        mpl_rigid_body_apply_impulse(manifold->A,impulse,ra);
+
+        float dot = vector2f_dot_vv(rv, manifold->normal);
+        Vector2 t;
+        t.x = rv.x - (manifold->normal.x * dot);
+        t.y = rv.y - (manifold->normal.y * dot);
+        vector2f_normalize(&t);
+
+        float jt = -vector2f_dot_vv(rv, t);
+        jt /= invMassSum;
+        jt /= manifold->contact_count;
+        
+        if (jt == 0.0f)
+        {
+            return;
+        }
+
+        Vector2 tangentImpulse;
+
+        if (abs(jt) < j * manifold->static_friction)
+        {
+            tangentImpulse.x = t.x * jt;
+            tangentImpulse.y = t.y * jt;
+        }
+        else
+        {
+            tangentImpulse.x = t.x * -j * manifold->dynamic_friction;
+            tangentImpulse.y = t.y * -j * manifold->dynamic_friction;
+        }
+        mpl_rigid_body_apply_impulse(manifold->B,tangentImpulse,rb);
+        vector2f_negate(&tangentImpulse);
+        mpl_rigid_body_apply_impulse(manifold->A,tangentImpulse,ra);    
+    }
+}
+void mpl_manifold_positional_correction(Manifold *manifold)
+{
+    const float k_slop = 0.05f;
+    const float percent = 0.4f;
+
+    float f = max(manifold->penetration - k_slop, 0.0f)/(manifold->A->invMass + manifold->B->invMass);
+    Vector2 correction;
+    correction.x = f*manifold->normal.x * percent;
+    correction.y = f*manifold->normal.y * percent;
+    
+    manifold->A->polygon.position.x -= correction.x * manifold->A->invMass;
+    manifold->A->polygon.position.y -= correction.y * manifold->A->invMass;
+
+    manifold->B->polygon.position.x += correction.x * manifold->B->invMass;
+    manifold->B->polygon.position.y += correction.y * manifold->B->invMass;
+}
+void mpl_manifold_reset(Manifold *manifold)
+{
+    manifold->contact_count = 0;
+    manifold->penetration = 0;
+}
+float mpl_find_axis_least_penetration(Polygon *polygon_a, Polygon *polygon_b,int *face)
+{
+    float best_distance = -1000.0f;
+    int best_index = 0;
+    for (int i = 0; i < polygon_a->vertex_count; ++i)
+    {
+        Vector2 normal;
+        normal.x = polygon_a->normals[i].x;
+        normal.y = polygon_a->normals[i].y;
+
+        Vector2 normal_flipped;
+        normal_flipped.x = -normal.x;
+        normal_flipped.y = -normal.y;
+
+        Vector2 support_point;
+        support_point.x = 0;
+        support_point.y = 0;
+        mpl_polygon_get_support_point(polygon_b->m_vertices,polygon_b->vertex_count,normal_flipped,&support_point);
+
+        Vector2 vertex;
+        vertex.x = polygon_a->m_vertices[i].x;
+        vertex.y = polygon_a->m_vertices[i].y;
+
+        Vector2 diff;
+        diff.x = support_point.x - vertex.x;
+        diff.y = support_point.y - vertex.y;
+
+        float dot = vector2f_dot_vv(normal, diff);
+
+        if (dot > best_distance)
+        {
+            best_distance = dot;
+            best_index = i;
+        }
+    }
+    *face = best_index;
+    return best_distance;
+}
+
+unsigned int mpl_gt(float a, float b)
+{
+    return a >= b * 0.95f + a * 0.0f;
+}
+int mpl_find_incident_face(Vector2 v[2], Polygon *RefPoly, Polygon *IncPoly, int referenceIndex)
+{
+    Vector2 referenceNormal = RefPoly->normals[referenceIndex];
+
+    matrix_mul_mv(RefPoly->matrix.matrix, referenceNormal,&referenceNormal);
+
+    float m_transposed[3][3];
+    matrix_transpose_mm(IncPoly->matrix.matrix,m_transposed);    
+    matrix_mul_mv(m_transposed,referenceNormal,&referenceNormal);
+
+    int incidentFace = 0;
+    float minDot = FLT_MAX;
+    for (int i = 0; i < IncPoly->vertex_count; ++i)
+    {
+        float dot = vector2f_cross_vv(referenceNormal, IncPoly->normals[i]);    
+        if (dot < minDot)
+        {
+            minDot = dot;
+            incidentFace = i;
+        }
+    }
+    //Why is this here? debugging?
+    matrix_mul_mv(IncPoly->matrix.matrix, IncPoly->m_vertices[incidentFace],&v[0]);
+    vector2f_add_vv(v[0], IncPoly->position,&v[0]);
+    //incidentFace = incidentFace + 1 >= (int)IncPoly.Vertices.Length ? 0 : incidentFace + 1;
+    matrix_mul_mv(IncPoly->matrix.matrix, IncPoly->m_vertices[incidentFace],&v[1]);
+    vector2f_add_vv(v[1], IncPoly->position,&v[1]);
+
+    return incidentFace;
+}
+int mpl_clip(Vector2 n, float c, Vector2 face[2])
+{
+    int sp = 0;
+    Vector2 points[2];
+    points[0].x = face[0].x;
+    points[0].y = face[0].y;
+    points[1].x = face[1].x;
+    points[1].y = face[1].y;
+
+    float d1 = vector2f_dot_vv(n, face[0])-c;
+    float d2 = vector2f_dot_vv(n, face[1])-c;
+
+    if (d1 <= 0.0f) points[sp++] = face[0];
+    if (d2 <= 0.0f) points[sp++] = face[1];
+
+    // If the points are on different sides of the plane
+    if (d1 * d2 < 0.0f) // less than to ignore -0.0f
+    {
+        // Push intersection point
+        float alpha = d1 / (d1 - d2);
+        points[sp].x = face[0].x  + alpha * (face[1].x  - face[0].x );
+        points[sp].y = face[0].y  + alpha * (face[1].y  - face[0].y );
+        ++sp;
+    }
+
+    // Assign our new converted values
+    face[0] = points[0];
+    face[1] = points[1];
+
+    return sp;
+}
+unsigned int mpl_broad_phase(RigidBody *A, RigidBody *B)
+{
+    float dx = A->polygon.position.x - B->polygon.position.x;
+    float dy = A->polygon.position.y - B->polygon.position.y;
+    float dist = sqrt(dx * dx + dy * dy);
+
+    return (dist < A->longest_radius + B->longest_radius);
+}
+float mpl_dist_sqr(Vector2 a, Vector2 b)
+{
+    Vector2 c;
+    vector2f_sub_vv(a,b,&c);
+    return vector2f_dot_vv(c,c);
+}
+unsigned int mpl_narrow_phase_c2c(Manifold *manifold, RigidBody *a, RigidBody *b)
+{
+    manifold->EMPTY = 0;
+    manifold->A = a;
+    manifold->B = b;
+    Vector2 normal;
+    vector2f_sub_vv(b->polygon.position, a->polygon.position,&normal);
+
+    float dist_sqr = normal.x * normal.x + normal.y * normal.y;
+    float radius = a->polygon.radius + a->polygon.radius;
+
+    // Not in contact
+    if (dist_sqr >= radius * radius)
+    {
+        manifold->contact_count = 0;
+        manifold->EMPTY = 1;
+        return 0;
+    }
+
+    float distance = sqrt(dist_sqr);
+
+    manifold->contact_count = 1;
+
+    if (distance == 0.0f)
+    {
+        manifold->penetration = a->polygon.radius;
+        manifold->normal.x = 1;
+        manifold->normal.y = 0;
+        manifold->contacts[0] = a->polygon.position;
+    }
+    else
+    {
+        manifold->penetration = radius - distance;
+        manifold->normal.x = normal.x / distance; // Faster than using Normalized since we already performed sqrt
+        manifold->normal.y = normal.y / distance;
+        manifold->contacts[0].x = manifold->normal.x * a->polygon.radius + a->polygon.position.x;
+        manifold->contacts[0].y = manifold->normal.y * a->polygon.radius + a->polygon.position.y;
+    }
+
+    return 1;
+}
+unsigned int mpl_narrow_phase_p2c(Manifold *manifold, RigidBody *a, RigidBody *b)
+{
+    manifold->EMPTY = 0;
+    manifold->A = a;
+    manifold->B = b;
+    
+    Vector2 normal;
+    vector2f_normal(b->polygon.position, a->polygon.position,&normal);
+    vector2f_normalize(&normal);
+    vector2f_cross(&normal);
+    Vector2 normal_negated;
+    vector2f_negate_vv(normal,&normal_negated);
+    Vector2 v1;
+    mpl_polygon_get_support_point(a->polygon.m_vertices,a->polygon.vertex_count, normal_negated,&v1);
+    Vector2 v2;
+    float separation = FLT_MIN;
+    int face_normal = 0;
+
+    for (int i = 0; i < a->polygon.vertex_count; i++)
+    {
+        Vector2 v;
+        vector2f_sub_vv(b->polygon.position,a->polygon.m_vertices[i],&v);
+        float s = vector2f_dot_vv(a->polygon.normals[i],v);
+
+        if (s > b->polygon.radius)
+        {
+            manifold->EMPTY = 1;
+            return 0;
+        }
+        if (s > separation)
+        {
+            separation = s;
+            face_normal = i;
+        }
+    }
+    int edge_index_a = a->polygon.m_edges[face_normal].m_index_a;
+    v1 = a->polygon.m_vertices[edge_index_a];
+
+    int edge_index_b = a->polygon.m_edges[face_normal].m_index_b;
+    v2 = a->polygon.m_vertices[edge_index_b];
+
+    Vector2 lol1;
+    Vector2 lol2;
+
+    vector2f_sub_vv(b->polygon.position, v1,&lol1);
+    vector2f_sub_vv(v2, v1,&lol2);
+    float dot1 = vector2f_dot_vv(lol1,lol2);
+
+    vector2f_sub_vv(b->polygon.position, v2,&lol1);
+    vector2f_sub_vv(v1,v2,&lol2);
+    float dot2 = vector2f_dot_vv(lol1,lol2);
+
+    manifold->contact_count = 1;
+    manifold->penetration = b->polygon.radius - separation;
+
+    if (separation < 0.0001f)
+    {
+        manifold->contact_count = 1;
+        manifold->normal = a->polygon.normals[face_normal];
+        manifold->contacts[0].x = manifold->normal.x * b->polygon.radius + b->polygon.position.x;
+        manifold->contacts[0].y = manifold->normal.y * b->polygon.radius + b->polygon.position.y;
+
+        manifold->penetration = b->polygon.radius;
+
+        return 0;
+    }
+    if (dot1 <= 0.0f)
+    {
+        if (mpl_dist_sqr(b->polygon.position, v1) > b->polygon.radius * b->polygon.radius)
+        {
+            manifold->EMPTY = 1;
+            return 0;
+        }
+        manifold->contacts[0] = v1;
+        float r = atan2(b->polygon.position.y - v1.y, b->polygon.position.x - v1.x);
+        Vector2 n;
+        n.x = cos(r);
+        n.y = sin(r);
+        vector2f_normalize(&n);
+
+        manifold->normal = n;
+        Vector2 surface;
+        surface.x = b->polygon.position.x + cos(r - PI) * b->polygon.radius;
+        surface.y = b->polygon.position.y + sin(r - PI) * b->polygon.radius;
+
+        float dx = surface.x - v1.x;
+        float dy = surface.y - v1.y;
+        manifold->penetration = sqrt(dx * dx + dy * dy);
+    }
+    else if (dot2 <= 0.0f)
+    {
+        if (mpl_dist_sqr(b->polygon.position, v2) > b->polygon.radius * b->polygon.radius)
+        {
+            manifold->EMPTY = 1;
+            return 0;
+        }
+        manifold->contacts[0] = v2;
+        float r = atan2(b->polygon.position.y - v2.y, b->polygon.position.x - v2.x);
+        Vector2 n;
+        n.x = cos(r); 
+        n.y = sin(r);         
+        vector2f_normalize(&n);
+        manifold->normal = n;
+        Vector2 surface;
+        surface.x = b->polygon.position.x + cos(r - PI) * b->polygon.radius;
+        surface.y = b->polygon.position.y + sin(r - PI) * b->polygon.radius;
+
+        float dx = surface.x - v2.x;
+        float dy = surface.y - v2.y;
+        manifold->penetration = sqrt(dx * dx + dy * dy);
+    }
+    else
+    {
+        manifold->normal = a->polygon.normals[face_normal];
+
+        manifold->contacts[0].x = b->polygon.position.x - a->polygon.normals[face_normal].x * (b->polygon.radius - manifold->penetration);
+        manifold->contacts[0].y = b->polygon.position.y - a->polygon.normals[face_normal].y * (b->polygon.radius - manifold->penetration);
+    }
+    a->is_colliding = 1;            
+    b->is_colliding = 1;
+    return 1;
+}
+unsigned int mpl_narrow_phase_p2p(Manifold *manifold, RigidBody *A, RigidBody *B)
+{
+    manifold->EMPTY = 0;
+    manifold->A = A;
+    manifold->B = B;
+
+    manifold->contact_count = 0;
+
+    int faceA = 0;
+    int faceB = 0;                                            
+
+    float penetrationA = mpl_find_axis_least_penetration(&A->polygon, &B->polygon,&faceA);
+    float penetrationB = mpl_find_axis_least_penetration(&B->polygon, &A->polygon,&faceB);
+
+
+    if (penetrationA >= 0.0f)
+    {
+        manifold->EMPTY = 1;
+        return 0;
+    }
+    if (penetrationB >= 0.0f)
+    {
+        manifold->EMPTY = 1;
+        return 0;
+    }
+
+
+    int reference_face_index;
+    unsigned int flip; // Always point from a to b
+
+    Polygon *reference_polygon; // Reference
+    Polygon *incident_polygon; // Incident
+
+    // Determine which shape contains reference face
+    if (mpl_gt(penetrationA, penetrationB))
+    {
+        reference_polygon = &A->polygon;
+        incident_polygon = &B->polygon;
+        reference_face_index = faceA;
+        flip = 0;
+    }
+    else
+    {
+        reference_polygon = &B->polygon;
+        incident_polygon = &A->polygon;
+        reference_face_index = faceB;
+        flip = 1;
+    }
+    //Convert the reference edge to a Vector2 array
+    Edge reference_edge = reference_polygon->m_edges[reference_face_index];
+    Vector2 reference_face[2];
+    reference_face[0] = reference_polygon->m_vertices[reference_polygon->m_edges[reference_face_index].m_index_a];
+    reference_face[1] = reference_polygon->m_vertices[reference_polygon->m_edges[reference_face_index].m_index_b];
+
+    Vector2 vertex1 = reference_face[0];
+    Vector2 vertex2 = reference_face[1];
+
+    int incident_face_index = mpl_find_incident_face(reference_face, reference_polygon, incident_polygon, reference_face_index);
+    Edge incident_edge = incident_polygon->m_edges[incident_face_index];
+
+    Vector2 incident_face[2];
+    incident_face[0] = incident_polygon->m_vertices[incident_polygon->m_edges[incident_face_index].m_index_a];
+    incident_face[1] = incident_polygon->m_vertices[incident_polygon->m_edges[incident_face_index].m_index_b];
+
+    // Calculate normals
+    Vector2 side_plane_normal;
+    vector2f_sub_vv(vertex2,vertex1,&side_plane_normal);
+    vector2f_normalize(&side_plane_normal);
+    //Debug.WriteLine(reference_polygon.EdgeToVector(reference_face_index)[1]);
+    Vector2 reference_face_normal;
+    reference_face_normal.x = side_plane_normal.y;
+    reference_face_normal.y = -side_plane_normal.x;
+
+    
+    
+    
+    float dist_from_origin = vector2f_dot_vv(reference_face_normal, vertex1);
+    float negative_side = -vector2f_dot_vv(side_plane_normal, vertex1);
+    float positive_side = vector2f_dot_vv(side_plane_normal, vertex2);
+    manifold->normal = reference_face_normal;
+    // Clip incident face to reference face side planes
+    Vector2 side_plane_normal_negated;
+    vector2f_negate_vv(side_plane_normal,&side_plane_normal_negated);
+
+    if (mpl_clip(side_plane_normal_negated, negative_side, incident_face) < 2)
+    {
+        //return;
+    }
+    if (mpl_clip(side_plane_normal, positive_side, incident_face) < 2)
+    {
+        //return;
+    }
+    if (flip)
+    {
+        vector2f_negate_vv(manifold->normal,&manifold->normal);
+    }
+
+
+    // Keep points behind reference face
+    int contact_count = 0;
+    float separation = vector2f_dot_vv(reference_face_normal, incident_face[0]) - dist_from_origin;
+
+    if (separation <= 0.0f)
+    {
+        manifold->contacts[contact_count] = incident_face[0];
+        manifold->penetration = -separation;
+        ++contact_count;
+    }
+    else
+    {
+        manifold->penetration = 0;
+    }
+    separation = vector2f_dot_vv(reference_face_normal, incident_face[1]) - dist_from_origin;
+
+    if (separation <= 0.0f)
+    {
+        manifold->contacts[contact_count] = incident_face[1];
+        manifold->penetration += -separation;
+        ++contact_count;
+        manifold->penetration /= contact_count;
+    }
+    manifold->contact_count = contact_count;
+    manifold->reference_face_index = reference_face_index;
+    manifold->incident_face_index = incident_face_index;
+
+    A->is_colliding = 1;            
+    B->is_colliding = 1;
+    return 1;
+}
+void mpl_update(RigidBody *bodies, unsigned int body_count,Manifold *manifolds, int iterations ,float dt, float G)
+{
+    unsigned int manifold_count = 0;
+    unsigned int manifold_capacity = 100;
+    Vector2 gravity;
+    gravity.x = 0;
+    gravity.y = 0;
+
+    for (int i = 0; i < body_count; i++)
+    {
+        if (!bodies[i].is_static && bodies[i].active && !bodies[i].ignore_gravity)
+        {                    
+            gravity.y = round(G * bodies[i].mass);
+            mpl_rigid_body_apply_force(&bodies[i],gravity);
+        }
+    }    
+    unsigned int limit_reached = 0;
+    for (int i = 0; i < body_count && !limit_reached; i++)
+    {
+        if (bodies[i].active)
+        {
+            for (int j = i; j < body_count && !limit_reached; ++j)
+            {
+                if (bodies[j].active)
+                {
+                    if (i != j)
+                    {
+                        if (!(bodies[i].is_static && bodies[j].is_static))
+                        {
+                            if(manifold_count < manifold_capacity)
+                            {
+                                
+                                if (mpl_broad_phase(&bodies[i], &bodies[j]))
+                                {
+                                    Manifold m = manifolds[manifold_count];
+                                    mpl_manifold_reset(&m);
+                                    unsigned int flag = 0;
+                                    if (0)
+                                    {
+                                        if (0)
+                                        {
+                                            //flag = CollisionDetection.NarrowPhaseC2C(ref m, bodies[i], bodies[j]);
+                                        }
+                                        else
+                                        {
+                                            //flag = CollisionDetection.NarrowPhaseP2C(ref m, bodies[i], bodies[j]);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (0)
+                                        {
+                                            //flag = CollisionDetection.NarrowPhaseP2C(ref m, bodies[i], bodies[j]);
+                                        }
+                                        else
+                                        {
+                                            flag = mpl_narrow_phase_p2p(&manifolds[manifold_count],&bodies[i], &bodies[j]);
+                                        }
+                                    }
+
+
+                                    if (flag) manifold_count++;
+                                    
+
+                                    if (manifold_count > manifold_capacity) 
+                                    {
+                                        limit_reached = 1;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     for (int i = 0; i < body_count; ++i)
     {
         if (!bodies[i].is_static && bodies[i].active)
@@ -343,29 +937,24 @@ void update(RigidBody *bodies, unsigned int body_count, int iterations ,float dt
             mpl_rigid_body_integrate_forces(&bodies[i],dt);
         }
     }  
-
-
-        
-    /*
     for (int i = 0; i < manifold_count; ++i)
     {
         if (!manifolds[i].EMPTY)
         {
-            manifolds[i].Init(dt);
+            mpl_manifold_init(&manifolds[i],dt);
         }
     }
             
-            for (int j = 0; j < iterations; ++j)
+    for (int j = 0; j < iterations; ++j)
+    {
+        for (int i = 0; i < manifold_count; ++i)
+        {
+            if (!manifolds[i].EMPTY)
             {
-                for (int i = 0; i < manifold_count; ++i)
-                {
-                    if (!manifolds[i].EMPTY)
-                    {
-                        manifolds[i].ApplyImpulse();
-                    }
-                }
+               mpl_manifold_apply_impulse(&manifolds[i]);
             }
-*/
+        }
+    }
             
     for (int i = 0; i < body_count; ++i)
     {
@@ -374,17 +963,15 @@ void update(RigidBody *bodies, unsigned int body_count, int iterations ,float dt
             mpl_rigid_body_integrate_velocity(&bodies[i],dt);
         }
     }
-         /*   
+      
     for (int i = 0; i < manifold_count; ++i)
     {
         if (!manifolds[i].EMPTY)
         {
-            manifolds[i].PositionalCorrection();
+            mpl_manifold_positional_correction(&manifolds[i]);
         }
     }
-    */
-   printf("%f\n",bodies[0].force.y);
-   printf("%f\n",bodies[0].velocity.y);
+    
 
     for (int i = 0; i < body_count; ++i)
     {
@@ -394,4 +981,11 @@ void update(RigidBody *bodies, unsigned int body_count, int iterations ,float dt
     {
         mpl_polygon_transform(&bodies[i].polygon);
     }
+}
+void mpl_rigid_body_set_static(RigidBody *rb)
+{
+    rb->inertia = 0.0f;
+    rb->invInertia = 0.0f;
+    rb->mass = 0.0f;
+    rb->invMass = 0.0f;
 }
