@@ -28,7 +28,7 @@ struct Polygon
     RotationMatrix matrix;
     Vector2 position,position_last;
     float orientation,orientation_last,radius;
-    Vector2 edge[2];
+    Vector2 contact_points[4];
 };
 typedef struct RigidBody RigidBody;
 struct RigidBody
@@ -58,7 +58,8 @@ struct Manifold
 };
 void mpl_polygon_init(Polygon *polygon, Vector2 *vertices, unsigned int vertex_count);
 void mpl_polygon_transform(Polygon *polygon);
-void mpl_rigid_body_init(RigidBody *rigid_body);
+void mpl_rigid_body_init(RigidBody *rigid_body, unsigned int shape,unsigned int width,unsigned int height);
 void mpl_update(RigidBody *bodies, unsigned int body_count,Manifold *manifolds, int iterations ,float dt, float G);
 void mpl_rigid_body_set_position(RigidBody *rigid_body,float x, float y);
 void mpl_rigid_body_set_static(RigidBody *rb);
+void mpl_rigid_body_apply_force(RigidBody *rigid_body,Vector2 f);
