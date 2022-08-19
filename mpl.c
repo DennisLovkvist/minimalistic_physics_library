@@ -254,6 +254,19 @@ void mpl_rigid_body_compute_mass(RigidBody *rigid_body,float density)
     rigid_body->invInertia = 1.0f / rigid_body->inertia;
     
 }
+void mpl_rigid_body_compute_mass_circle(RigidBody *rigid_body,float density,float radius)
+{
+    float area = PI * radius*radius;
+
+    rigid_body->polygon.radius = radius;
+    rigid_body->longest_radius = radius;
+
+    rigid_body->mass = density * area;
+    rigid_body->inertia = rigid_body->mass * radius * radius;
+    rigid_body->invMass = 1.0f / rigid_body->mass;
+    rigid_body->invInertia = 1.0f / rigid_body->inertia;
+    
+}
 void mpl_polygon_make_square(Polygon *polygon, unsigned int width,unsigned int height)
 {
     polygon->vertex_count = 4;
@@ -284,14 +297,22 @@ void mpl_rigid_body_init(RigidBody *rigid_body, unsigned int shape,unsigned int 
 {    
     if(shape == 0)
     {
-        mpl_polygon_make_triangle(&rigid_body->polygon,width, height);
+        rigid_body->is_polygon = 0;
+        rigid_body->polygon.vertex_count = 0;
     }
     else if(shape == 1)
     {
+        rigid_body->is_polygon = 1;
+        mpl_polygon_make_triangle(&rigid_body->polygon,width, height);        
+    }
+    else if(shape == 2)
+    {
+        rigid_body->is_polygon = 1;
         mpl_polygon_make_square(&rigid_body->polygon,width, height);
     }
     else
     {
+        rigid_body->is_polygon = 1;
         mpl_polygon_make_square(&rigid_body->polygon,width, height);
     }
     rigid_body->active = 1;
@@ -300,8 +321,8 @@ void mpl_rigid_body_init(RigidBody *rigid_body, unsigned int shape,unsigned int 
     rigid_body->lock_orientation = 0;
     rigid_body->ignore_gravity = 0;
     rigid_body->restitution = 0.2f;
-    rigid_body->static_frictionf =  0.5f;
-    rigid_body->dynamic_frictionf = 0.3f;
+    rigid_body->static_frictionf =  0.4f;
+    rigid_body->dynamic_frictionf = 0.2f;
     rigid_body->angularVelocity = 0;
     rigid_body->torque = 0;
     rigid_body->orient = 0;
@@ -320,7 +341,14 @@ void mpl_rigid_body_init(RigidBody *rigid_body, unsigned int shape,unsigned int 
     rigid_body->polygon.contact_points[2].x = rigid_body->polygon.contact_points[2].y =  0;
     rigid_body->polygon.contact_points[3].x = rigid_body->polygon.contact_points[3].y =  0;
 
-    mpl_rigid_body_compute_mass(rigid_body,10);
+    if(rigid_body->is_polygon)
+    {
+        mpl_rigid_body_compute_mass(rigid_body,10);
+    }
+    else
+    {
+        mpl_rigid_body_compute_mass_circle(rigid_body,10,width/2);
+    }
 
 }
 void mpl_rigid_body_set_position(RigidBody *rigid_body,float x, float y)
@@ -342,6 +370,7 @@ void mpl_rigid_body_apply_impulse(RigidBody *rigid_body,Vector2 impulse, Vector2
     }
     rigid_body->velocity.x += rigid_body->invMass * impulse.x;
     rigid_body->velocity.y += rigid_body->invMass * impulse.y;
+    
     float n = vector2f_cross_vv(contactVector, impulse);
     if (!rigid_body->lock_orientation) 
     {
@@ -388,8 +417,8 @@ void mpl_manifold_apply_impulse(Manifold *manifold)
         ra.y = manifold->A->polygon.position.y - manifold->contacts[i].y;
 
         Vector2 rb;
-        rb.x = manifold->B->polygon.position.x - manifold->contacts[i].x;
-        rb.y = manifold->B->polygon.position.y - manifold->contacts[i].y;         
+        rb.x = manifold->contacts[i].x-manifold->B->polygon.position.x;
+        rb.y = manifold->contacts[i].y-manifold->B->polygon.position.y;         
         
         Vector2 cross_rb_av;
         vector2f_cross_vf(rb,manifold->B->angularVelocity,&cross_rb_av);
@@ -420,8 +449,9 @@ void mpl_manifold_apply_impulse(Manifold *manifold)
         impulse.x = manifold->normal.x * j;
         impulse.y = manifold->normal.y * j;
 
-        mpl_rigid_body_apply_impulse(manifold->B,impulse,rb);
-        vector2f_negate(&impulse);
+       mpl_rigid_body_apply_impulse(manifold->B,impulse,rb);
+        impulse.x = -impulse.x;
+        impulse.y = -impulse.y;
         mpl_rigid_body_apply_impulse(manifold->A,impulse,ra);
 
         float dot = vector2f_dot_vv(rv, manifold->normal);
@@ -452,7 +482,8 @@ void mpl_manifold_apply_impulse(Manifold *manifold)
             tangentImpulse.y = t.y * -j * manifold->dynamic_friction;
         }
         mpl_rigid_body_apply_impulse(manifold->B,tangentImpulse,rb);
-        vector2f_negate(&tangentImpulse);
+        tangentImpulse.x = -tangentImpulse.x;
+        tangentImpulse.y = -tangentImpulse.y;
         mpl_rigid_body_apply_impulse(manifold->A,tangentImpulse,ra);    
     }
 }
@@ -633,6 +664,156 @@ unsigned int mpl_narrow_phase_c2c(Manifold *manifold, RigidBody *a, RigidBody *b
 
     return 1;
 }
+
+
+
+
+
+unsigned int mpl_narrow_phase_p2c(Manifold *manifold, RigidBody *a, RigidBody *b)
+{
+    manifold->EMPTY = 0;
+    manifold->A = a;
+    manifold->B = b;
+
+   Vector2 normal;
+   vector2f_normal(b->polygon.position, a->polygon.position, &normal);
+
+    vector2f_normalize(&normal);
+    vector2f_cross_v(normal,&normal);
+
+    Vector2 normal_flipped;
+    vector2f_negate_vv(normal,&normal_flipped);
+
+
+    float separation = FLT_MIN;
+    int face_normal = 0;
+
+    for (int i = 0; i < a->polygon.vertex_count; i++)
+    {
+        Vector2 delta;
+        delta.x = b->polygon.position.x - a->polygon.m_vertices[i].x;
+        delta.y = b->polygon.position.y - a->polygon.m_vertices[i].y;
+        
+        float s = vector2f_dot_vv(a->polygon.normals[i],delta);
+
+        if (s > b->polygon.radius)
+        {
+            manifold->EMPTY = 1;
+            return 0;
+        }
+        if (s > separation)
+        {
+            separation = s;
+            face_normal = i;
+        }
+
+    }
+    Vector2 v1 = a->polygon.m_vertices[a->polygon.m_edges[face_normal].m_index_a];
+    Vector2 v2 = a->polygon.m_vertices[a->polygon.m_edges[face_normal].m_index_b];
+
+    Vector2 delta1;
+    delta1.x = b->polygon.position.x - v1.x;
+    delta1.y = b->polygon.position.y - v1.y;
+    Vector2 delta2;
+    delta2.x = v2.x - v1.x;
+    delta2.y = v2.y - v1.y;
+    float dot1 = vector2f_dot_vv(delta1, delta2);
+
+    delta1.x = b->polygon.position.x - v2.x;
+    delta1.y = b->polygon.position.y - v2.y;
+    delta2.x = v1.x - v2.x;
+    delta2.y = v1.y - v2.y;    
+    float dot2 = vector2f_dot_vv(delta1, delta2);
+
+    manifold->contact_count = 1;
+    manifold->penetration = b->polygon.radius - separation;
+
+    if (separation < 0.0001f)
+    {
+        manifold->contact_count = 1;
+        manifold->normal = a->polygon.normals[face_normal];
+        manifold->contacts[0].x = manifold->normal.x * b->polygon.radius + b->polygon.position.x;
+        manifold->contacts[0].y = manifold->normal.y * b->polygon.radius + b->polygon.position.y;
+
+        manifold->penetration = b->polygon.radius;
+        return 0;
+    }
+    if (dot1 <= 0.0f)
+    {
+        if (mpl_dist_sqr(b->polygon.position, v1) > b->polygon.radius * b->polygon.radius)
+        {
+            manifold->EMPTY = 1;
+            return 0;
+        }
+        manifold->contacts[0] = v1;
+        float r = atan2(b->polygon.position.y - v1.y, b->polygon.position.x - v1.x);
+        Vector2 n;
+        n.x = cos(r);
+        n.y = sin(r);
+        vector2f_normalize(&n);
+
+        manifold->normal = n;
+        Vector2 surface;
+        surface.x = b->polygon.position.x + cos(r - PI) * b->polygon.radius;
+        surface.y = b->polygon.position.y + sin(r - PI) * b->polygon.radius;
+
+        float dx = surface.x - v1.x;
+        float dy = surface.y - v1.y;
+        manifold->penetration = sqrt(dx * dx + dy * dy);
+    }
+    else if (dot2 <= 0.0f)
+    {
+        if (mpl_dist_sqr(b->polygon.position, v2) > b->polygon.radius * b->polygon.radius)
+        {
+            manifold->EMPTY = 1;
+            return 0;
+        }
+        manifold->contacts[0] = v2;
+        float r = atan2(b->polygon.position.y - v2.y, b->polygon.position.x - v2.x);
+        Vector2 n;
+        n.x = cos(r);
+        n.x = sin(r);
+        vector2f_normalize(&n);
+        manifold->normal = n;
+        Vector2 surface;
+        surface.x = b->polygon.position.x + cos(r - PI) * b->polygon.radius;
+        surface.y = b->polygon.position.y + sin(r - PI) * b->polygon.radius;
+
+        float dx = surface.x - v2.x;
+        float dy = surface.y - v2.y;
+        manifold->penetration = sqrt(dx * dx + dy * dy);
+    }
+    else
+    {
+        manifold->normal = a->polygon.normals[face_normal];
+
+        manifold->contacts[0].x = b->polygon.position.x - a->polygon.normals[face_normal].x * (b->polygon.radius - manifold->penetration);
+        manifold->contacts[0].y = b->polygon.position.y - a->polygon.normals[face_normal].y * (b->polygon.radius - manifold->penetration);
+    }
+
+    manifold->B->polygon.contact_points[0].x = b->polygon.position.x;
+    manifold->B->polygon.contact_points[0].y = b->polygon.position.y;
+    manifold->B->polygon.contact_points[1].x = manifold->contacts[0].x;
+    manifold->B->polygon.contact_points[1].y = manifold->contacts[0].y;
+
+    manifold->B->polygon.contact_points[2].x = v1.x;
+    manifold->B->polygon.contact_points[2].y = v1.y;
+    manifold->B->polygon.contact_points[3].x = v2.x;
+    manifold->B->polygon.contact_points[3].y = v2.y;
+
+    a->is_colliding = 1;            
+    b->is_colliding = 1;
+    return 1;
+}
+
+
+
+
+
+
+
+
+
 unsigned int mpl_narrow_phase_p2p(Manifold *manifold, RigidBody *A, RigidBody *B)
 {
     manifold->EMPTY = 0;
@@ -810,27 +991,27 @@ void mpl_update(RigidBody *bodies, unsigned int body_count,Manifold *manifolds, 
                             if(manifold_count < manifold_capacity)
                             {
                                 
-                                if (mpl_broad_phase(&bodies[i], &bodies[j]) || 1)
+                                if (mpl_broad_phase(&bodies[i], &bodies[j]))
                                 {
                                     Manifold m = manifolds[manifold_count];
                                     mpl_manifold_reset(&m);
                                     unsigned int flag = 0;
-                                    if (0)
+                                    if (!bodies[i].is_polygon)
                                     {
-                                        if (0)
+                                        if (!bodies[j].is_polygon)
                                         {
-                                            //flag = CollisionDetection.NarrowPhaseC2C(ref m, bodies[i], bodies[j]);
+                                            flag =mpl_narrow_phase_c2c(&manifolds[manifold_count],&bodies[i], &bodies[j]);
                                         }
                                         else
                                         {
-                                            //flag = CollisionDetection.NarrowPhaseP2C(ref m, bodies[i], bodies[j]);
+                                           flag = mpl_narrow_phase_p2c(&manifolds[manifold_count],&bodies[j], &bodies[i]);
                                         }
                                     }
                                     else
                                     {
-                                        if (0)
+                                        if (!bodies[j].is_polygon)
                                         {
-                                            //flag = CollisionDetection.NarrowPhaseP2C(ref m, bodies[i], bodies[j]);
+                                            flag = mpl_narrow_phase_p2c(&manifolds[manifold_count],&bodies[i], &bodies[j]);
                                         }
                                         else
                                         {
@@ -905,4 +1086,5 @@ void mpl_rigid_body_set_static(RigidBody *rb)
     rb->invInertia = 0.0f;
     rb->mass = 0.0f;
     rb->invMass = 0.0f;
+    rb->lock_orientation = 1;
 }

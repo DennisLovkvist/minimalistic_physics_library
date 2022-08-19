@@ -34,7 +34,7 @@ typedef struct RigidBody RigidBody;
 struct RigidBody
 {
     Polygon polygon;
-    unsigned int is_colliding,active,is_static,lock_orientation,ignore_gravity;
+    unsigned int is_polygon,is_colliding,is_static,active,lock_orientation,ignore_gravity;
     float restitution,static_frictionf,dynamic_frictionf;
     Vector2 velocity;
     Vector2 force;
