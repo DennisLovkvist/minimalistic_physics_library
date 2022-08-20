@@ -22,8 +22,8 @@ typedef struct Polygon Polygon;
 struct Polygon
 {
     unsigned int vertex_count;
-    Vector2 m_vertices[4];
-    Edge m_edges[4];
+    Vector2 vertices[4];
+    Edge edges[4];
     Vector2 normals[4];
     RotationMatrix matrix;
     Vector2 position,position_last;
@@ -35,25 +35,25 @@ struct RigidBody
 {
     Polygon polygon;
     unsigned int is_polygon,is_colliding,is_static,active,lock_orientation,ignore_gravity;
-    float restitution,static_frictionf,dynamic_frictionf;
+    float restitution,static_friction,dynamic_friction;
     Vector2 velocity;
     Vector2 force;
-    float angularVelocity,torque,orient;
-    float mass, invMass, inertia, invInertia;
+    float angular_velocity,torque,orient;
+    float mass, inverse_mass, inertia, inverse_inertia;
     float aprox_point_area,longest_radius,damping,velocity_epsilon;
 };
 typedef struct Manifold Manifold;
 struct Manifold
 {
         float e,static_friction,dynamic_friction,penetration;
-        RigidBody *A;
-        RigidBody *B;
+        RigidBody *rigid_body_a;
+        RigidBody *rigid_body_b;
         int contact_count,reference_face_index,incident_face_index;
         Polygon *reference_polygon;
         Polygon *incident_polygon;
         Vector2 normal;
         Vector2 contacts[2];
-        unsigned int EMPTY;
+        unsigned int is_empty;
         Vector2 test_point1,test_point2;
 };
 void mpl_polygon_init(Polygon *polygon, Vector2 *vertices, unsigned int vertex_count);
