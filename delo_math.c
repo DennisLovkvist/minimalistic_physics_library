@@ -3,11 +3,19 @@
 #include "mpl.h"
 #include <stdio.h>
 
-void vector2f_normal(Vector2 a, Vector2 b, Vector2 *result)
+void vector2f_normal(float ax, float ay, float bx, float by,float *cx, float *cy)
 {
-    result->x = -(b.y - a.y);
-    result->y = b.x- a.x;
+    *cx = -(by - ay);
+    *cy = bx- ax;
 }
+void vector2f_normalize(float *ax,float *ay)
+{
+    float val = 1.0f / sqrt(((*ax) * (*ax)) + ((*ay) * (*ay)));
+    *ax *= val;
+    *ay *= val;
+}
+
+
 void vector2f_cross_vf(Vector2 v, float z, Vector2 *result)
 {
     result->x = -1.0f * v.y * z;
@@ -67,9 +75,9 @@ void vector2f_negate(Vector2 *a)
     a->x = -a->x;
     a->y = -a->y;
 }
-float vector2f_dot_vv(Vector2 a, Vector2 b)
+float vector2f_dot_vv(float ax,float ay,float bx, float by)
 {
-    return a.x * b.x + a.y * b.y;
+    return ax * bx + ay * by;
 }  
 float vector2f_dot_vf(Vector2 a, float b)
 {
@@ -81,29 +89,27 @@ void vector2f_normalize_v(Vector2 a, Vector2 *result)
     result->x = a.x * val;
     result->y = a.y * val;
 }
-void vector2f_normalize(Vector2 *a)
+void matrix_mul_mv2(float *matrix,unsigned int index, Vector2 vector, Vector2 *result)
 {
-    float val = 1.0f / sqrt((a->x * a->x) + (a->y * a->y));
-    a->x *= val;
-    a->y *= val;
+    result->x = matrix[index+(0 + 3 * 0)] * vector.x + matrix[index+(0 + 3 * 1)] * vector.y;
+    result->y = matrix[index+(1 + 3 * 0)] * vector.x + matrix[index+(1 + 3 * 1)] * vector.y;
 }
 void matrix_mul_mv(float matrix[3][3], Vector2 vector, Vector2 *result)
 {
     result->x = matrix[0][0] * vector.x + matrix[0][1] * vector.y;
     result->y = matrix[1][0] * vector.x + matrix[1][1] * vector.y;
 }
-void matrix_mul_mm(float input_matrix[3][3], float transformation_matrix[3][1],float result[3][1])
+void matrix_mul_mm(float *input_matrix,unsigned int index, float transformation_matrix[3][1],float result[3][1])
 {
     for (int i = 0; i < 3; i++)
-    {
-        for (int j = 0; j < 1; j++)
+    {        
+        result[i][0] = 0;
+        for (int k = 0; k < 3; k++)
         {
-            result[i][j] = 0;
-            for (int k = 0; k < 3; k++)
-            {
-                result[i][j] += input_matrix[i][k] * transformation_matrix[k][j];
-            }
-        }
+            int n =i+ 3*k;
+
+            result[i][0] += input_matrix[index+n] * transformation_matrix[k][0];
+        }        
     }
 }
 void matrix_transpose(float matrix[3][3])
@@ -116,13 +122,14 @@ void matrix_transpose(float matrix[3][3])
         }
     }
 }
-void matrix_transpose_mm(float matrix[3][3],float result[3][3])
+void matrix_transpose_mm(float *matrix,unsigned int index,float result[3][3])
 {
     for (int i = 0; i < 3; i++)
     {
         for (int j = 0; j < 3; j++)
         {
-            result[j][i] = matrix[i][j];
+            int n = i + 3*j;
+            result[j][i] = matrix[index+n];
         }
     }
 }
