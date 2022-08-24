@@ -1,9 +1,16 @@
 #pragma once
+
 typedef struct Vector2 Vector2;
 struct Vector2
 {
     float x;
     float y;
+};
+typedef struct BroadPhaseCollision BroadPhaseCollision;
+struct BroadPhaseCollision
+{
+    int body_a;
+    int body_b;
 };
 typedef struct Edge Edge;
 struct Edge
@@ -89,7 +96,7 @@ void mpl_polygon_init(RigidBody *rigid_body,unsigned int index, Vector2 *vertice
 void mpl_polygon_transform(RigidBody*rigid_body, unsigned int index);
 void mpl_rigid_bodies_init(RigidBody *rigid_body, unsigned int capacity);
 void mpl_rigid_body_init(RigidBody *rigid_body,unsigned int index, unsigned int shape,unsigned int width,unsigned int height);
-void mpl_update(RigidBody *rigid_bodies, unsigned int body_count,Manifold *manifolds, unsigned int manifold_capacity, int iterations ,float dt, float G);
+void mpl_update(RigidBody *rb, int body_count,Manifold *manifolds, int manifold_capacity,BroadPhaseCollision *bfc,int bfcs, int iterations ,float dt, float G);
 void mpl_rigid_body_set_position(RigidBody *rigid_body,unsigned int index,float x, float y);
 void mpl_rigid_body_set_static(RigidBody *rb, unsigned int index);
 void mpl_rigid_body_apply_force(RigidBody *rigid_body, unsigned int index,Vector2 f);

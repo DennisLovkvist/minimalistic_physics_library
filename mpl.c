@@ -5,6 +5,8 @@
 #include "delo_math.h"
 #include <math.h>
 #include "immintrin.h"
+#include <mm_malloc.h>
+
 void mpl_polygon_get_centroid(float *vertices_x,float *vertices_y,unsigned int index, unsigned int vertex_count, float *centroid_x,float *centroid_y)
 {
     *centroid_x = vertices_x[index];
@@ -224,11 +226,11 @@ void mpl_rigid_body_compute_mass(RigidBody *rigid_body,unsigned int index, float
         }
     }
     radius /= vertex_count;
-
     rigid_body->radius[index] = radius;
     rigid_body->longest_radius[index] = longest_radius;
-
+        
     rigid_body->mass[index] = density * area;
+
     rigid_body->inertia[index] = rigid_body->mass[index] * radius * radius;
     rigid_body->inverse_mass[index] = 1.0f / rigid_body->mass[index];
     rigid_body->inverse_inertia[index] = 1.0f / rigid_body->inertia[index];
@@ -280,49 +282,45 @@ void mpl_rigid_bodies_init(RigidBody *rigid_body, unsigned int capacity)
     rigid_body->active = malloc(sizeof(unsigned int)*capacity);
     rigid_body->lock_orientation = malloc(sizeof(unsigned int)*capacity);
     rigid_body->ignore_gravity = malloc(sizeof(unsigned int)*capacity);
-    rigid_body->restitution = malloc(sizeof(float)*capacity);
-    rigid_body->static_friction = malloc(sizeof(float)*capacity);
-    rigid_body->dynamic_friction = malloc(sizeof(float)*capacity);
-    rigid_body->velocity_x = malloc(sizeof(float)*capacity);
-    rigid_body->velocity_y = malloc(sizeof(float)*capacity);
-    rigid_body->force_x = malloc(sizeof(float)*capacity);
-    rigid_body->force_y = malloc(sizeof(float)*capacity);
-    rigid_body->angular_velocity = malloc(sizeof(float)*capacity);
-    rigid_body->torque = malloc(sizeof(float)*capacity);
-    rigid_body->orient = malloc(sizeof(float)*capacity);
-    rigid_body->mass = malloc(sizeof(float)*capacity);
-    rigid_body->inverse_mass = malloc(sizeof(float)*capacity);
-    rigid_body->inertia = malloc(sizeof(float)*capacity);
-    rigid_body->inverse_inertia = malloc(sizeof(float)*capacity);
-    rigid_body->aprox_point_area = malloc(sizeof(float)*capacity);
-    rigid_body->longest_radius = malloc(sizeof(float)*capacity);
-    rigid_body->damping = malloc(sizeof(float)*capacity);
-    rigid_body->velocity_epsilon = malloc(sizeof(float)*capacity);
-
-    rigid_body->matrix = malloc(sizeof(float)*capacity*3*3);
     rigid_body->vertex_count = malloc(sizeof(unsigned int)*capacity);
-    rigid_body->vertices_x = malloc(sizeof(float)*capacity*4);
-    rigid_body->vertices_y = malloc(sizeof(float)*capacity*4);
 
-    rigid_body->edge_vertex_a_x = malloc(sizeof(float)*capacity*4);
-    rigid_body->edge_vertex_b_y = malloc(sizeof(float)*capacity*4);
     rigid_body->edge_index_a = malloc(sizeof(int)*capacity*4);
     rigid_body->edge_index_b = malloc(sizeof(int)*capacity*4);
 
-    rigid_body->normals_x = malloc(sizeof(float)*capacity*4);
-    rigid_body->normals_y = malloc(sizeof(float)*capacity*4);
-
-    rigid_body->position_x = malloc(sizeof(float)*capacity);
-    rigid_body->position_y = malloc(sizeof(float)*capacity);
-    rigid_body->position_last_x = malloc(sizeof(float)*capacity);
-    rigid_body->position_last_y = malloc(sizeof(float)*capacity);
-
-    rigid_body->orientation = malloc(sizeof(float)*capacity);
-    rigid_body->orientation_last = malloc(sizeof(float)*capacity);
-    rigid_body->radius = malloc(sizeof(float)*capacity);
-
-    rigid_body->contact_points_x = malloc(sizeof(float)*capacity*4);
-    rigid_body->contact_points_y = malloc(sizeof(float)*capacity*4);
+    rigid_body->restitution = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->static_friction = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->dynamic_friction = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->velocity_x = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->velocity_y = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->force_x =(float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->force_y = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->angular_velocity = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->torque = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->orient = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->mass = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->inverse_mass = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->inertia =(float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->inverse_inertia = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->aprox_point_area = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->longest_radius = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->damping = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->velocity_epsilon = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->matrix = (float *)_mm_malloc(sizeof(float)*capacity*3*3,32);    
+    rigid_body->vertices_x = (float *)_mm_malloc(sizeof(float)*capacity*4,32);
+    rigid_body->vertices_y = (float *)_mm_malloc(sizeof(float)*capacity*4,32);
+    rigid_body->edge_vertex_a_x = (float *)_mm_malloc(sizeof(float)*capacity*4,32);
+    rigid_body->edge_vertex_b_y = (float *)_mm_malloc(sizeof(float)*capacity*4,32);
+    rigid_body->normals_x = (float *)_mm_malloc(sizeof(float)*capacity*4,32);
+    rigid_body->normals_y = (float *)_mm_malloc(sizeof(float)*capacity*4,32);
+    rigid_body->position_x = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->position_y = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->position_last_x = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->position_last_y = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->orientation = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->orientation_last = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->radius = (float *)_mm_malloc(sizeof(float)*capacity,32);
+    rigid_body->contact_points_x = (float *)_mm_malloc(sizeof(float)*capacity*4,32);
+    rigid_body->contact_points_y = (float *)_mm_malloc(sizeof(float)*capacity*4,32);
 }
 void mpl_rigid_body_init(RigidBody *rigid_body, unsigned int index,unsigned int shape,unsigned int width,unsigned int height)
 {    
@@ -352,8 +350,8 @@ void mpl_rigid_body_init(RigidBody *rigid_body, unsigned int index,unsigned int 
     rigid_body->lock_orientation[index] = 0;
     rigid_body->ignore_gravity[index] = 0;
     rigid_body->restitution[index] = 0.2f;
-    rigid_body->static_friction[index] =  0.4f;
-    rigid_body->dynamic_friction[index] = 0.2f;
+    rigid_body->static_friction[index] =  0.6f;
+    rigid_body->dynamic_friction[index] = 0.4f;
     rigid_body->angular_velocity[index] = 0;
     rigid_body->torque[index] = 0;
     rigid_body->orient[index] = 0;
@@ -363,7 +361,7 @@ void mpl_rigid_body_init(RigidBody *rigid_body, unsigned int index,unsigned int 
     rigid_body->inverse_inertia[index] = 0;
     rigid_body->aprox_point_area[index] = 1;
     rigid_body->longest_radius[index] = 0;
-    rigid_body->damping[index] = 0.7f;
+    rigid_body->damping[index] = 0.9f;
     rigid_body->velocity_epsilon[index] = 0.001f;
     rigid_body->velocity_x[index] = rigid_body->velocity_y[index] =  0;
     rigid_body->force_x[index] = rigid_body->force_y[index] =  0;
@@ -415,7 +413,7 @@ void mpl_rigid_body_integrate_velocity(RigidBody *rigid_body,unsigned int index,
     rigid_body->position_x[index] += rigid_body->velocity_x[index] * rigid_body->damping[index] * dt;
     rigid_body->position_y[index] += rigid_body->velocity_y[index] * rigid_body->damping[index] * dt;
 
-    if (!rigid_body->lock_orientation) 
+    if (!rigid_body->lock_orientation[index]) 
     {
         rigid_body->orientation[index] += rigid_body->angular_velocity[index] * rigid_body->damping[index] * dt;
     }
@@ -724,9 +722,13 @@ unsigned int mpl_narrow_phase_p2c(Manifold *manifold, RigidBody *rigid_bodies, u
 
     for (int i = 0; i < rigid_bodies->vertex_count[a]; i++)
     {
-        Vector2 delta = {delta.x = rigid_bodies->position_x[b] - rigid_bodies->position_x[b],delta.y = rigid_bodies->position_y[a] - rigid_bodies->position_y[a]};
+        Vector2 delta = 
+        {
+            rigid_bodies->position_x[b] - rigid_bodies->vertices_x[v_index_a+i],
+            rigid_bodies->position_y[b] - rigid_bodies->vertices_y[v_index_a+i]
+        };
         
-        float s = vector2f_dot_vv(rigid_bodies->normals_x[v_index_a+i],rigid_bodies->normals_x[v_index_a+i],delta.x,delta.y);
+        float s = vector2f_dot_vv(rigid_bodies->normals_x[v_index_a+i],rigid_bodies->normals_y[v_index_a+i],delta.x,delta.y);
 
         if (s > rigid_bodies->radius[b])
         {
@@ -987,62 +989,163 @@ unsigned int mpl_narrow_phase_p2p(Manifold *manifold, RigidBody *rigid_bodies, u
 
     return 1;
 }
-void mpl_update(RigidBody *rigid_bodies, unsigned int body_count,Manifold *manifolds, unsigned int manifold_capacity, int iterations ,float dt, float G)
+void mpl_update(RigidBody *rb, int body_count,Manifold *manifolds, int manifold_capacity,BroadPhaseCollision *bfc,int bfcs, int iterations ,float dt, float G)
 {
     unsigned int manifold_count = 0;
     Vector2 gravity;
     gravity.x = 0;
     gravity.y = G;
 
-    for (int i = 0; i < body_count; i++)
+
+    __m256 v_g = _mm256_set1_ps(G);
+    
+
+    __m256 v_dt = _mm256_set1_ps(dt);
+    for (int i = 0; i < body_count; i+=8)
     {
-        if (!rigid_bodies->is_static[i] && rigid_bodies->active[i] && !rigid_bodies->ignore_gravity[i])
-        {                    
-            gravity.y = round(G * rigid_bodies->mass[i]);
-            mpl_rigid_body_apply_force(rigid_bodies,i,gravity);
-        }
+        __m256  v_mass = _mm256_load_ps(&rb->mass[i]);
+        __m256 v_force_y = _mm256_load_ps(&rb->force_y[i]);
+        __m256 v_gravity = _mm256_mul_ps(_mm256_mul_ps(v_mass,v_g),v_dt);
+        v_force_y = _mm256_add_ps(v_force_y,v_gravity);        
+        _mm256_store_ps(&rb->force_y[i], v_force_y);
     }  
+    
+
+    int bfc_count = 0;
+    int m = 0;
+    int n = 0;
+    for (int i = 0; i < body_count; i++)
+    {  
+        __m256 one = _mm256_set1_ps(1);
+        __m256  v_ipx = _mm256_set1_ps(rb->position_x[i]);
+        __m256  v_ipy = _mm256_set1_ps(rb->position_y[i]);
+        __m256  v_ir = _mm256_set1_ps(rb->longest_radius[i]);
+        
+        m++;
+        if(m == 8)
+        {
+            n += 8;
+            m=0;
+        }
+
+        for (int j = i+1; j < body_count-8; j+=8)
+        {
+            __m256  v_jpx = _mm256_loadu_ps(&rb->position_x[j]);
+            __m256  v_jpy = _mm256_loadu_ps(&rb->position_y[j]);
+
+            __m256  v_jr = _mm256_loadu_ps(&rb->longest_radius[j]);
+
+            __m256 v_sub_x = _mm256_sub_ps(v_ipx,v_jpx);
+            __m256 v_sub_y = _mm256_sub_ps(v_ipy,v_jpy);
+            __m256 v_sqrt = _mm256_sqrt_ps(_mm256_add_ps(_mm256_mul_ps(v_sub_x,v_sub_x), _mm256_mul_ps(v_sub_y,v_sub_y)));
+          
+            __m256 mask = _mm256_cmp_ps(v_sqrt,_mm256_add_ps(v_ir,v_jr),_CMP_GT_OS);
+            mask = _mm256_and_ps(mask, one);
+
+            
+            _Alignas(32) float m[8];  
+            _mm256_store_ps(&m[0], mask);
+
+            for (int k = 0; k < 8; k++)
+            {                
+                if(m[k] == 0)
+                {                    
+                    bfc[bfc_count].body_a = i;
+                    bfc[bfc_count].body_b = j+k;
+                    bfc_count ++;                    
+                }
+            }            
+
+        }
+        
+    }
+    BroadPhaseCollision c2c[8];
+    BroadPhaseCollision p2c[8];
+    BroadPhaseCollision p2p[8];
+    int c2c_count = 0;
+    int p2c_count = 0;
+    int p2p_count = 0;
+
+    for (size_t i = 0; i < bfc_count; i++)
+    {
+        if(rb->vertex_count[bfc->body_a] == rb->vertex_count[bfc->body_b])
+        {
+            if(rb->vertex_count[bfc->body_a] == 0)
+            {
+                c2c[c2c_count].body_a = bfc->body_a;
+                c2c[c2c_count].body_b = bfc->body_b;
+                c2c_count++;
+            }
+            else
+            {
+                p2p[p2p_count].body_a = bfc->body_a;
+                p2p[p2p_count].body_b = bfc->body_b;
+                p2p_count++;
+            }
+        }
+        else
+        {
+            if(rb->vertex_count[bfc->body_a] == 0)
+            {
+                p2c[p2c_count].body_a = bfc->body_b;
+                p2c[p2c_count].body_b = bfc->body_a;
+                p2c_count++;   
+            }
+            else
+            {
+                p2c[p2c_count].body_a = bfc->body_a;
+                p2c[p2c_count].body_b = bfc->body_b;
+                p2c_count++;
+            }
+        }
+    }
+    
+
+
+
+
+        
     
     for (int i = 0; i < body_count; i++)
     {
-        if (rigid_bodies->active[i])
+        if (rb->active[i])
         {
             for (int j = i; j < body_count; ++j)
             {
-                if (rigid_bodies->active[j])
+                if (rb->active[j])
                 {
                     if (i != j)
                     {
-                        if (!(rigid_bodies->is_static[i] && rigid_bodies->is_static[j]))
+                        if (!(rb->is_static[i] && rb->is_static[j]))
                         {
                             if(manifold_count < manifold_capacity)
                             {
                                 
-                                if (mpl_broad_phase(rigid_bodies,i,j))
+                                if (mpl_broad_phase(rb,i,j))
                                 {
                                     Manifold m = manifolds[manifold_count];
                                     mpl_manifold_reset(&m);
                                     unsigned int flag = 0;
-                                    if (!rigid_bodies->is_polygon[i])
+                                    if (!rb->is_polygon[i])
                                     {
-                                        if (!rigid_bodies->is_polygon[j])
+                                        if (!rb->is_polygon[j])
                                         {
-                                            flag =mpl_narrow_phase_c2c(&manifolds[manifold_count],rigid_bodies,i,j);
+                                            flag =mpl_narrow_phase_c2c(&manifolds[manifold_count],rb,i,j);
                                         }
                                         else
                                         {
-                                           flag = mpl_narrow_phase_p2c(&manifolds[manifold_count],rigid_bodies,j,i);
+                                           flag = mpl_narrow_phase_p2c(&manifolds[manifold_count],rb,j,i);
                                         }
                                     }
                                     else
                                     {
-                                        if (!rigid_bodies->is_polygon[j])
+                                        if (!rb->is_polygon[j])
                                         {
-                                            flag = mpl_narrow_phase_p2c(&manifolds[manifold_count],rigid_bodies,i,j);
+                                            flag = mpl_narrow_phase_p2c(&manifolds[manifold_count],rb,i,j);
                                         }
                                         else
                                         {
-                                            flag = mpl_narrow_phase_p2p(&manifolds[manifold_count],rigid_bodies,i,j);
+                                            flag = mpl_narrow_phase_p2p(&manifolds[manifold_count],rb,i,j);
                                         }
                                     }
 
@@ -1055,58 +1158,40 @@ void mpl_update(RigidBody *rigid_bodies, unsigned int body_count,Manifold *manif
             }
         }
     }
+    
 
+    for (int i = 0; i < body_count; i+=8)
+    {      
+        __m256 v_inverse_mass = _mm256_load_ps(&rb->inverse_mass[i]);  
+        __m256 v_force_x = _mm256_load_ps(&rb->force_x[i]);
+        __m256 v_vel_x = _mm256_load_ps(&rb->velocity_x[i]);
+        v_vel_x = _mm256_add_ps(v_vel_x,_mm256_mul_ps(_mm256_mul_ps(v_force_x,v_inverse_mass),v_dt)); 
 
-/*
-    for (int i = 0; i < body_count; ++i)
+         _mm256_store_ps(&rb->velocity_x[i], v_vel_x);   
+    }    
+    for (int i = 0; i < body_count; i+=8)
     {
-        __m256 delta_time = _mm256_set_ps(dt, dt, dt, dt, dt, dt, dt, dt);
-        __m256 rb_torque = _mm256_set_ps(rigid_bodies[i].torque, rigid_bodies[i+1].torque, rigid_bodies[i+2].torque, rigid_bodies[i+3].torque, rigid_bodies[i+4].torque, rigid_bodies[i+5].torque, rigid_bodies[i+6].torque, rigid_bodies[i+7].torque);
-        __m256 rb_inverse_inertia = _mm256_set_ps(rigid_bodies[i].inverse_inertia, rigid_bodies[i+1].inverse_inertia, rigid_bodies[i+2].inverse_inertia, rigid_bodies[i+3].inverse_inertia, rigid_bodies[i+4].inverse_inertia, rigid_bodies[i+5].inverse_inertia, rigid_bodies[i+6].inverse_inertia, rigid_bodies[i+7].inverse_inertia);
-        
-        __m256 rb_force_x = _mm256_set_ps(rigid_bodies[i].force.x, rigid_bodies[i+1].force.x, rigid_bodies[i+2].force.x, rigid_bodies[i+3].force.x, rigid_bodies[i+4].force.x, rigid_bodies[i+5].force.x, rigid_bodies[i+6].force.x, rigid_bodies[i+7].force.x);
-        __m256 rb_inverse_mass = _mm256_set_ps(rigid_bodies[i].inverse_mass, rigid_bodies[i+1].inverse_mass, rigid_bodies[i+2].inverse_mass, rigid_bodies[i+3].inverse_mass, rigid_bodies[i+4].inverse_mass, rigid_bodies[i+5].inverse_mass, rigid_bodies[i+6].inverse_mass, rigid_bodies[i+7].inverse_mass);
-        __m256 vel = _mm256_mul_ps(rb_force_x, rb_inverse_mass);
-        vel = _mm256_mul_ps(vel, delta_time);
-        __m256 rb_vel_x = _mm256_add_ps(rb_vel_x, vel);
-
-         __m256 rb_force_y = _mm256_set_ps(rigid_bodies[i].force.y, rigid_bodies[i+1].force.y, rigid_bodies[i+2].force.y, rigid_bodies[i+3].force.y, rigid_bodies[i+4].force.y, rigid_bodies[i+5].force.y, rigid_bodies[i+6].force.y, rigid_bodies[i+7].force.y);
-        vel = _mm256_mul_ps(rb_force_x, rb_inverse_mass);
-        vel = _mm256_mul_ps(vel, delta_time);
-        __m256 rb_vel_y = _mm256_add_ps(rb_vel_y, vel);
-
-        
-        
-
-        __m256 rb_lock_orientation = _mm256_set_ps(rigid_bodies[i].lock_orientation, rigid_bodies[i+1].lock_orientation, rigid_bodies[i+2].lock_orientation, rigid_bodies[i+3].lock_orientation, rigid_bodies[i+4].lock_orientation, rigid_bodies[i+5].lock_orientation, rigid_bodies[i+6].lock_orientation, rigid_bodies[i+7].lock_orientation);
-        __m256 rb_angular_velocity_x = _mm256_set_ps(rigid_bodies[i].velocity.x, rigid_bodies[i+1].velocity.x, rigid_bodies[i+2].velocity.x, rigid_bodies[i+3].velocity.x, rigid_bodies[i+4].velocity.x, rigid_bodies[i+5].velocity.x, rigid_bodies[i+6].velocity.x, rigid_bodies[i+7].velocity.x);
-        __m256 rb_angular_velocity_y = _mm256_set_ps(rigid_bodies[i].velocity.y, rigid_bodies[i+1].velocity.y, rigid_bodies[i+2].velocity.y, rigid_bodies[i+3].velocity.y, rigid_bodies[i+4].velocity.y, rigid_bodies[i+5].velocity.y, rigid_bodies[i+6].velocity.y, rigid_bodies[i+7].velocity.y);
-
-        __m256 angular_velocity = _mm256_mul_ps(rb_torque, rb_inverse_inertia);
-        __m256 angular_velocity = _mm256_mul_ps(angular_velocity, delta_time);
-        __m256 angular_velocity = _mm256_mul_ps(angular_velocity, rb_lock_orientation);
-        rb_angular_velocity_x = _mm256_add_ps(rb_angular_velocity_x, angular_velocity);
-        rb_angular_velocity_y = _mm256_add_ps(rb_angular_velocity_y, angular_velocity);
-
-
-        
-        if (!bodies[i].is_static && bodies[i].active)
-        {
-            mpl_rigid_body_integrate_forces(&bodies[i],dt);
-        }
-    }  */
-     for (int i = 0; i < body_count; ++i)
-    {
-        if (!rigid_bodies->is_static[i] && rigid_bodies->active[i])
-        {
-            mpl_rigid_body_integrate_forces(rigid_bodies,i,dt);
-        }
+        __m256 v_inverse_mass = _mm256_load_ps(&rb->inverse_mass[i]);
+        __m256 v_force_y = _mm256_load_ps(&rb->force_y[i]);
+        __m256 v_vel_y = _mm256_load_ps(&rb->velocity_y[i]);
+        v_vel_y = _mm256_add_ps(v_vel_y,_mm256_mul_ps(_mm256_mul_ps(v_force_y,v_inverse_mass),v_dt)); 
+       _mm256_store_ps(&rb->velocity_y[i], v_vel_y); 
     } 
+    for (int i = 0; i < body_count; i+=8)
+    {
+        __m256 v_inverse_inertia = _mm256_load_ps(&rb->inverse_inertia[i]);
+        __m256 v_torque = _mm256_load_ps(&rb->torque[i]);
+        __m256 v_angular_velocity = _mm256_load_ps(&rb->angular_velocity[i]);
+        v_angular_velocity = _mm256_add_ps(v_angular_velocity, _mm256_mul_ps(_mm256_mul_ps(v_inverse_inertia,v_torque),v_dt));
+       _mm256_store_ps(&rb->angular_velocity[i],  v_angular_velocity); 
+    }
+
+
     for (int i = 0; i < manifold_count; ++i)
     {
         if (!manifolds[i].is_empty)
         {
-            mpl_manifold_init(&manifolds[i],rigid_bodies,i,dt);
+            mpl_manifold_init(&manifolds[i],rb,i,dt);
         }
     }
             
@@ -1116,35 +1201,63 @@ void mpl_update(RigidBody *rigid_bodies, unsigned int body_count,Manifold *manif
         {
             if (!manifolds[i].is_empty)
             {
-               mpl_manifold_apply_impulse(&manifolds[i],rigid_bodies);
+               mpl_manifold_apply_impulse(&manifolds[i],rb);
             }
         }
     }
-            
+         
     for (int i = 0; i < body_count; ++i)
     {
-        if (!rigid_bodies->is_static[i] && rigid_bodies->active[i])
+        if (!rb->is_static[i] && rb->active[i])
         {
-            mpl_rigid_body_integrate_velocity(rigid_bodies,i,dt);
+            mpl_rigid_body_integrate_velocity(rb,i,dt);
         }
     }
+    
+
+
       
     for (int i = 0; i < manifold_count; ++i)
     {
         if (!manifolds[i].is_empty)
         {
-            mpl_manifold_positional_correction(&manifolds[i],rigid_bodies);
+            mpl_manifold_positional_correction(&manifolds[i],rb);
         }
     }
+
+
+    for (size_t i = 0; i < manifold_count; i++)
+    {
+        Manifold manifold = manifolds[i];
+
+        unsigned int rigid_body_a = manifold.rigid_body_a;
+        unsigned int rigid_body_b = manifold.rigid_body_b;
+
+        const float k_slop = 0.05f;
+        const float percent = 0.4f;
+
+        float f = max(manifold.penetration - k_slop, 0.0f)/(rb->inverse_mass[rigid_body_a] + rb->inverse_mass[rigid_body_b]);
+        Vector2 correction;
+        correction.x = f * manifold.normal.x * percent;
+        correction.y = f * manifold.normal.y * percent;
+        
+        rb->position_x[rigid_body_a] -= correction.x * rb->inverse_mass[rigid_body_a];
+        rb->position_y[rigid_body_a] -= correction.y * rb->inverse_mass[rigid_body_a];
+
+        rb->position_x[rigid_body_b] += correction.x * rb->inverse_mass[rigid_body_b];
+        rb->position_y[rigid_body_b] += correction.y * rb->inverse_mass[rigid_body_b];
+    }
+    
     
 
     for (int i = 0; i < body_count; ++i)
     {
-        mpl_rigid_body_clear_forces(rigid_bodies,i);
+        rb->force_x[i] = 0;
+        rb->force_y[i] = 0;
     }
     for (int i = 0; i < body_count; ++i)
     {
-        mpl_polygon_transform(rigid_bodies,i);
+        mpl_polygon_transform(rb,i);
     }
 }
 void mpl_rigid_body_set_static(RigidBody *rb, unsigned int index)
