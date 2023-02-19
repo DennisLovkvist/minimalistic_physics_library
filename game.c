@@ -22,6 +22,8 @@ RigidBodyMeta *rigid_bodies_meta;
 
 Sprite sprite_circle;
 
+double dt = 0.0016f;
+
 int game_init()
 { 
   
@@ -77,7 +79,11 @@ void game_update(double xpos, double ypos, float dt)
     rigid_bodies[4].velocity.x = v.x;
     rigid_bodies[4].velocity.y = v.y;
   
-    mpl_update(rigid_bodies,rigid_bodies_meta, CAPACITY_RIGID_BODIES,manifolds,CAPACITY_MANIFOLDS, 2 ,0.0016f, 12000.0f);            
+    time_t t0, t1;
+    time(&t0);
+    mpl_update(rigid_bodies,rigid_bodies_meta, CAPACITY_RIGID_BODIES,manifolds,CAPACITY_MANIFOLDS, 2 , dt, 2000000.0f);      
+    time(&t1); 
+    dt = difftime(t1, t0);     
 }
 
 void game_draw(GLFWwindow *window,SpriteBatch *sprite_batch,PrimitiveBatch *primitive_batch,Projection projection,unsigned int shader_primitive,unsigned int shader_circle)

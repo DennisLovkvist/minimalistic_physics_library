@@ -980,9 +980,9 @@ void mpl_update(RigidBody *rigid_bodies,RigidBodyMeta *rigid_bodies_meta, unsign
         RigidBodyMeta *rigid_body_meta = &rigid_bodies_meta[i];
         
         int flag = rigid_body_meta->active*(!rigid_body_meta->is_static);
-        rigid_body->velocity.x += ((rigid_body->force.x * rigid_body->inverse_mass) * (dt)*flag);
-        rigid_body->velocity.y += ((rigid_body->force.y * rigid_body->inverse_mass) * (dt)*flag);
-        rigid_body->angular_velocity += (rigid_body->torque * rigid_body->inverse_inertia * (dt))*(!rigid_body->lock_orientation);
+        rigid_body->velocity.x += ((rigid_body->force.x * rigid_body->inverse_mass) * (dt*flag));
+        rigid_body->velocity.y += ((rigid_body->force.y * rigid_body->inverse_mass) * (dt*flag));
+        rigid_body->angular_velocity += (rigid_body->torque * rigid_body->inverse_inertia * (dt*flag))*(!rigid_body->lock_orientation);
         
     }  
     for (int i = 0; i < manifold_count; ++i)
